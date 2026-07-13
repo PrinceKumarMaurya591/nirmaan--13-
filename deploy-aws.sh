@@ -26,7 +26,7 @@ set -euo pipefail
 AWS_REGION="ap-south-1"                   # Mumbai region (nearest to India)
 AWS_ACCOUNT="029925098554"
 KEY_NAME="thikedar-key"                    # EC2 key pair name
-GIT_REPO_URL="https://github.com/YOUR_USERNAME/YOUR_REPO.git"  # <-- CHANGE THIS
+GIT_REPO_URL="https://github.com/PrinceKumarMaurya591/nirmaan--13-.git"  # <-- CHANGE THIS
 DB_PASSWORD="Thikedar123!"                 # RDS password (min 8 char, must have uppercase + special char)
 APP_NAME="thikedar"
 DOMAIN_NAME=""                             # Optional: "thikedar.yourdomain.com"
