@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -29,6 +30,7 @@ async function startServer() {
   app.use(
     helmet({
       contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+        useDefaults: false,
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'", "'unsafe-inline'"],
@@ -36,7 +38,7 @@ async function startServer() {
           fontSrc: ["'self'", "https://fonts.gstatic.com"],
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           connectSrc: ["'self'"],
-          upgradeInsecureRequests: [],
+          upgradeInsecureRequests: null,
         }
       } : false,
       crossOriginEmbedderPolicy: false,

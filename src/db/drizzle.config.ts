@@ -8,8 +8,11 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   schemaFilter: ["public"],
-  dbCredentials: dbUrl 
-    ? { url: dbUrl }
+  dbCredentials: dbUrl
+    ? {
+        url: dbUrl,
+        ssl: dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') ? false : { rejectUnauthorized: false }
+      }
     : {
         host: process.env.SQL_HOST || process.env.host || "",
         user: process.env.SQL_ADMIN_USER || process.env.SQL_USER || process.env.user || "",

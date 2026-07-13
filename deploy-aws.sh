@@ -87,7 +87,7 @@ SG_ID=$(aws ec2 describe-security-groups \
     --region "${AWS_REGION}" \
     --output text 2>/dev/null || echo "null")
 
-if [ "$SG_ID" = "null" ] || [ -z "$SG_ID" ]; then
+if [ "$SG_ID" = "null" ] || [ "$SG_ID" = "None" ] || [ -z "$SG_ID" ]; then
     SG_ID=$(aws ec2 create-security-group \
         --group-name "${SG_NAME}" \
         --description "Security group for ${APP_NAME} web server" \
@@ -139,7 +139,7 @@ SG_RDS_ID=$(aws ec2 describe-security-groups \
     --region "${AWS_REGION}" \
     --output text 2>/dev/null || echo "null")
 
-if [ "$SG_RDS_ID" = "null" ] || [ -z "$SG_RDS_ID" ]; then
+if [ "$SG_RDS_ID" = "null" ] || [ "$SG_RDS_ID" = "None" ] || [ -z "$SG_RDS_ID" ]; then
     SG_RDS_ID=$(aws ec2 create-security-group \
         --group-name "${SG_RDS_NAME}" \
         --description "Security group for ${APP_NAME} RDS" \
@@ -186,8 +186,7 @@ if [ "$DB_EXISTS" = "NOT_FOUND" ]; then
         --storage-type "gp2" \
         --vpc-security-group-ids "${SG_RDS_ID}" \
         --db-name "thikedar" \
-        --backup-retention-period 7 \
-        --deletion-protection \
+        --backup-retention-period 1 \
         --no-publicly-accessible \
         --region "${AWS_REGION}" > /dev/null
     
@@ -236,7 +235,7 @@ echo "   AMI: ${UBUNTU_AMI}"
 # STEP 5: Create EC2 Instance (t2.micro Free Tier)
 # ============================================================
 echo ""
-echo "🖥️  Step 5/9: Creating EC2 instance (t2.micro - Free Tier)..."
+echo "🖥️  Step 5/9: Creating EC2 instance (t3.micro - Free Tier)..."
 
 INSTANCE_ID=$(aws ec2 describe-instances \
     --filters "Name=tag:Name,Values=${INSTANCE_NAME}" \
@@ -245,7 +244,7 @@ INSTANCE_ID=$(aws ec2 describe-instances \
     --region "${AWS_REGION}" \
     --output text 2>/dev/null || echo "null")
 
-if [ "$INSTANCE_ID" = "null" ] || [ -z "$INSTANCE_ID" ]; then
+if [ "$INSTANCE_ID" = "null" ] || [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
     # Create user data script (runs on EC2 startup)
     cat > /tmp/user-data.sh << 'USERDATA'
 #!/bin/bash
@@ -256,7 +255,7 @@ USERDATA
 
     INSTANCE_ID=$(aws ec2 run-instances \
         --image-id "${UBUNTU_AMI}" \
-        --instance-type "t2.micro" \
+        --instance-type "t3.micro" \
         --key-name "${KEY_NAME}" \
         --security-group-ids "${SG_ID}" \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${INSTANCE_NAME}}]" \
@@ -335,14 +334,21 @@ ssh -o StrictHostKeyChecking=no -i "${KEY_NAME}.pem" ubuntu@"${EC2_IP}" "RDS_END
     cat > .env << ENVEOF
 DATABASE_URL="postgres://postgres:${DB_PASSWORD}@${RDS_ENDPOINT}:5432/thikedar"
 JWT_SECRET="thikedar-$(openssl rand -hex 16)"
-NODE_ENV=production
 ENVEOF
+    
+    echo "   💾 Adding 2GB swap memory (prevents OOM during build)..."
+    sudo fallocate -l 2G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
     
     echo "   🏗️  Building application..."
     npm run build
     
     echo "   🗄️  Pushing database schema..."
-    npm run db:push
+    # Use drizzle-orm directly (drizzle-kit push hangs on some PostgreSQL versions)
+    export $(grep -v "^#" .env | xargs) && node push-schema.mjs
     
     echo "   ⚡ Installing PM2..."
     sudo npm install -g pm2
@@ -438,14 +444,14 @@ echo "   🔄 New version deploy:"
 echo "   cd ~/nirmaan && git pull && npm install && npm run build && pm2 restart thikedar"
 echo ""
 echo "   💰 Cost:"
-echo "   EC2 t2.micro   → Free Tier (750 hrs/month)"
+echo "   EC2 t3.micro   → Free Tier (750 hrs/month)"
 echo "   RDS db.t3.micro → Free Tier (750 hrs/month)"
 echo "   Total: ~₹0/month (Free Tier में)"
 echo ""
 echo "⚠️  IMPORTANT:"
-echo "   - RDS deletion protection is ON (manually disable to delete)"
 echo "   - Free Tier 12 months के लिए valid है"
 echo "   - 750 hrs/month = 1 instance 24x7 चला सकते हैं"
+echo "   - Backup retention: 1 day (Free Tier limit)"
 echo ""
 
 # Save info to file
