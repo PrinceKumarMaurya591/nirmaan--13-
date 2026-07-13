@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: thikedar-app
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # Requires you to provide your Postgres DB connection URL in the Render dashboard
