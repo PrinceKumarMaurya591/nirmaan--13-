@@ -1,4 +1,32 @@
 
+// ============================================================
+// 📱 Capacitor Native API Redirect
+// When running inside Android APK (Capacitor), all /api/* fetch
+// calls must be redirected to the production server because the
+// web assets are loaded from the local filesystem (file://).
+// ============================================================
+import { getApiUrl, isNativePlatform } from './lib/config';
+
+if (isNativePlatform()) {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    let url: string;
+    if (typeof input === 'string') {
+      url = getApiUrl(input);
+      return originalFetch(url, init);
+    } else if (input instanceof Request) {
+      url = getApiUrl(input.url);
+      const modifiedRequest = new Request(url, input);
+      return originalFetch(modifiedRequest, init);
+    } else if (input instanceof URL) {
+      url = getApiUrl(input.toString());
+      return originalFetch(url, init);
+    }
+    return originalFetch(input, init);
+  };
+  console.log('[Capacitor] API redirect enabled ->', getApiUrl('/api'));
+}
+
 // Global error tracker
 window.addEventListener("error", (event) => {
   try {

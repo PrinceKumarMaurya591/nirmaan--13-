@@ -1,0 +1,126 @@
+# ============================================================
+# 📱 Nirmaan APK Builder - GitHub Actions Workflow
+# ============================================================
+# Triggers:
+#   - Push to main/master branch
+#   - Creating a git tag (v*.*.*)
+#   - Manual trigger from GitHub Actions tab
+#
+# Output:
+#   - app-debug.apk (debug build, no signing needed)
+#   - app-release-unsigned.apk (unsigned release build)
+#
+# Setup Required:
+#   1. Go to GitHub repo → Settings → Secrets and variables → Actions
+#   2. Add repository secret: VITE_API_URL = http://65.1.112.112:3000
+# ============================================================
+
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Step 1: Checkout repository ──
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Step 2: Setup Node.js 22 ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # ── Step 3: Install npm dependencies ──
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Step 4: Setup Java 17 (required by Android Gradle) ──
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ── Step 5: Setup Android SDK ──
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ── Step 6: Build web app with production API URL ──
+      - name: Build web app
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env.production
+          npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      # ── Step 7: Verify web build output ──
+      - name: Verify web build
+        run: |
+          ls -la dist/
+          echo "---"
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}"
+          # Verify the API URL is embedded in the JS bundle
+          if [ -n "${{ secrets.VITE_API_URL }}" ]; then
+            grep -o "http://[^\"]*" dist/assets/index-*.js | head -3 || echo "URL embedding check skipped"
+          fi
+
+      # ── Step 8: Sync Capacitor with Android ──
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      # ── Step 9: Create local.properties for Android SDK ──
+      - name: Configure Android SDK path
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          echo "SDK location: $ANDROID_HOME"
+          ls -la $ANDROID_HOME/platforms/
+
+      # ── Step 10: Build APK ──
+      - name: Build APK (${{ github.event.inputs.build_type || 'debug' }})
+        run: |
+          cd android
+          if [ "${{ github.event.inputs.build_type }}" = "release" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "📦 Building release APK..."
+            ./gradlew assembleRelease
+          else
+            echo "📦 Building debug APK..."
+            ./gradlew assembleDebug
+          fi
+
+      # ── Step 11: Upload APK as artifact ──
+      - name: Upload Debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nirmaan-apk-${{ github.event.inputs.build_type || 'debug' }}-${{ github.sha }}
+          path: android/app/build/outputs/apk/**/*.apk
+          retention-days: 30
+
+      # ── Step 12: Create GitHub Release (only on tags) ──
+      - name: Create Release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/**/*.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
