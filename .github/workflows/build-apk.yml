@@ -40,11 +40,11 @@ jobs:
     steps:
       # ── Step 1: Checkout repository ──
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ── Step 2: Setup Node.js 22 ──
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'npm'
@@ -55,14 +55,14 @@ jobs:
 
       # ── Step 4: Setup Java 17 (required by Android Gradle) ──
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
       # ── Step 5: Setup Android SDK ──
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # ── Step 6: Build web app with production API URL ──
       - name: Build web app
@@ -98,12 +98,13 @@ jobs:
       - name: Build APK (${{ github.event.inputs.build_type || 'debug' }})
         run: |
           cd android
+          chmod +x gradlew
           if [ "${{ github.event.inputs.build_type }}" = "release" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "📦 Building release APK..."
-            ./gradlew assembleRelease
+            bash ./gradlew assembleRelease
           else
             echo "📦 Building debug APK..."
-            ./gradlew assembleDebug
+            bash ./gradlew assembleDebug
           fi
 
       # ── Step 11: Upload APK as artifact ──
